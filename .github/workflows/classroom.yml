@@ -1,0 +1,128 @@
+name: GitHub Classroom Workflow
+
+'on':
+  - push
+  - workflow_dispatch
+  - repository_dispatch
+
+permissions:
+  checks: write
+  actions: read
+  contents: read
+
+jobs:
+  run-autograding-tests:
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-classroom[bot]'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 'tasks app exists'
+        id: tasks-app-exists
+        uses: classroom-resources/autograding-command-grader@v1
+        with:
+          test-name: 'tasks app exists'
+          command: |-
+            TASKS_DIR=$(find . -maxdepth 4 -type d -iname "tasks" | head -n1)
+            test -n "$TASKS_DIR" && test -f "$TASKS_DIR/apps.py"
+          timeout: 2
+          max-score: 5
+
+      - name: 'tasks app registered in INSTALLED_APPS'
+        id: tasks-app-registered
+        uses: classroom-resources/autograding-command-grader@v1
+        with:
+          test-name: 'tasks app registered in INSTALLED_APPS'
+          command: |-
+            SETTINGS=$(find . -maxdepth 4 -iname "settings.py" | head -n1)
+            grep -E "['\"]tasks['\"]" "$SETTINGS"
+          timeout: 2
+          max-score: 5
+
+      - name: 'Project passes Django check'
+        id: django-check
+        uses: classroom-resources/autograding-command-grader@v1
+        with:
+          test-name: 'Project passes Django check'
+          setup-command: 'python3 -m pip install --quiet django'
+          command: |-
+            MANAGE=$(find . -maxdepth 3 -iname "manage.py" | head -n1)
+            cd "$(dirname "$MANAGE")"
+            python3 manage.py check
+          timeout: 3
+          max-score: 10
+
+      - name: 'Named routes resolve (home, about, contact)'
+        id: named-routes-resolve
+        uses: classroom-resources/autograding-command-grader@v1
+        with:
+          test-name: 'Named routes resolve (home, about, contact)'
+          setup-command: 'python3 -m pip install --quiet django'
+          command: |-
+            MANAGE=$(find . -maxdepth 3 -iname "manage.py" | head -n1)
+            cd "$(dirname "$MANAGE")"
+            python3 manage.py shell -c "
+            from django.urls import reverse
+            for name in ['home', 'about', 'contact']:
+                path = reverse(name)
+                print(name, '->', path)
+            "
+          timeout: 3
+          max-score: 15
+
+      - name: 'Routes respond when server runs'
+        id: routes-respond
+        uses: classroom-resources/autograding-command-grader@v1
+        with:
+          test-name: 'Routes respond when server runs'
+          setup-command: 'python3 -m pip install --quiet django'
+          command: |-
+            MANAGE=$(find . -maxdepth 3 -iname "manage.py" | head -n1)
+            cd "$(dirname "$MANAGE")"
+            PATHS=$(python3 manage.py shell -c "
+            from django.urls import reverse
+            for name in ['home', 'about', 'contact']:
+                print(reverse(name))
+            " 2>/dev/null | grep '^/')
+            if [ -z "$PATHS" ]; then
+              echo "No reversible paths found — failing."
+              exit 1
+            fi
+            timeout 8 python3 manage.py runserver --noreload 0.0.0.0:8000 &
+            sleep 3
+            for p in $PATHS; do
+              STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8000${p}")
+              echo "GET ${p} -> ${STATUS}"
+              if [ "$STATUS" -ge 400 ]; then
+                exit 1
+              fi
+            done
+          timeout: 3
+          max-score: 10
+
+      - name: 'No virtual environment committed'
+        id: no-venv-committed
+        uses: classroom-resources/autograding-command-grader@v1
+        with:
+          test-name: 'No virtual environment committed'
+          command: '! find . -maxdepth 4 -iname "pyvenv.cfg" | grep -q .'
+          timeout: 2
+          max-score: 5
+
+      - name: Autograding Reporter
+        uses: classroom-resources/autograding-grading-reporter@v1
+        env:
+          TASKS-APP-EXISTS_RESULTS: "${{steps.tasks-app-exists.outputs.result}}"
+          TASKS-APP-REGISTERED_RESULTS: "${{steps.tasks-app-registered.outputs.result}}"
+          DJANGO-CHECK_RESULTS: "${{steps.django-check.outputs.result}}"
+          NAMED-ROUTES-RESOLVE_RESULTS: "${{steps.named-routes-resolve.outputs.result}}"
+          ROUTES-RESPOND_RESULTS: "${{steps.routes-respond.outputs.result}}"
+          NO-VENV-COMMITTED_RESULTS: "${{steps.no-venv-committed.outputs.result}}"
+        with:
+          runners: tasks-app-exists,tasks-app-registered,django-check,named-routes-resolve,routes-respond,no-venv-committed
