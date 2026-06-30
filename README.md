@@ -82,3 +82,32 @@ This repo includes automated checks (`.github/workflows/classroom.yml`) that ver
 - no virtual environment was committed
 
 These checks cover the mechanical parts of the assignment. Your README explanations and homework answers are graded separately by your instructor.
+
+
+
+
+
+
+# Homework Questions (answer in your README)
+
+1. In your own words, explain the difference between a project and an app.
+2. What command creates a new Django app?
+3. Why do we register an app inside `INSTALLED_APPS`?
+4. What does giving a URL a `name=` actually let you do later?
+
+
+Here are simple answers you can paste into your README:
+
+#1. Difference between a project and an app
+A Django project is the whole website — it holds the overall settings, the main URL list, and ties everything together. An app is one small piece of that website that handles one specific feature (like a "tasks" app, a "blog" app, or a "users" app). A project can contain many apps working together.
+
+#2. Command to create a new Django app
+
+python manage.py startapp app_name
+
+
+#3. Why register an app inside INSTALLED_APPS
+Django doesn't automatically know an app exists just because the folder is there. Adding it to INSTALLED_APPS in settings.py tells Django "this app is part of my project," so Django can load its models, templates, and other features properly.
+
+#4. What giving a URL a name= lets you do later
+It gives that URL a nickname you can reuse anywhere in your code (templates, views, redirects) instead of typing the actual path. So if the URL path ever changes later, you only update it in one place (urls.py), and everywhere else that uses the name will still work correctly.
